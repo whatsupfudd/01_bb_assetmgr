@@ -6,7 +6,7 @@ import qualified Options.Runtime as Rto
 
 import Data.Version (showVersion)
 import Development.GitRev (gitHash, gitCommitDate)
-import Paths_importer (version)
+import Paths_assetmgr (version)
 
 versionHu :: Rto.RunOptions -> IO ()
 versionHu _ = do

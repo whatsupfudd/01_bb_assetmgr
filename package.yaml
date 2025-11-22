@@ -58,6 +58,7 @@ dependencies:
   - http-client
   - primitive
   - memory
+  - uuid
 
 
 default-extensions:

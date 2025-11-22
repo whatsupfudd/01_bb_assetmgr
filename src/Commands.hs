@@ -4,6 +4,8 @@ module Commands  (
   , module Commands.Import
   , module Commands.Test
   , module Commands.IngestClass
+  , module Commands.List
+  , module Commands.Fetch
  )
 where
 
@@ -12,3 +14,5 @@ import Commands.Version
 import Commands.Import
 import Commands.Test
 import Commands.IngestClass
+import Commands.List
+import Commands.Fetch

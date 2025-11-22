@@ -1,17 +1,24 @@
 module DB.Connect where
 
 import Control.Exception (bracket)
-import Control.Monad.Cont (ContT (..))    -- liftIO
+import Control.Monad.Cont (ContT (..))
+import Control.Monad.IO.Class (liftIO)
 
 import Data.ByteString (ByteString)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 import Data.Time.Clock (DiffTime)
 
 import GHC.Word (Word16)
 
-import qualified Hasql.Connection as DbConn
-import           Hasql.Pool (Pool, acquire, release)
+import qualified Hasql.Connection as Hc
+{-
+import qualified Hasql.Connection.Setting as HcS
+import qualified Hasql.Connection.Settings.Connection as HcSc
+-}
+import qualified Hasql.Pool as Hp
 
-data DbConfig = DbConfig {
+data PgDbConfig = PgDbConfig {
   port :: Word16
   , host :: ByteString
   , user :: ByteString
@@ -25,7 +32,7 @@ data DbConfig = DbConfig {
   deriving (Show)
 
 
-defaultDbConf = DbConfig {
+defaultPgDbConf = PgDbConfig {
   port = 5432
   , host = "test"
   , user = "test"
@@ -35,17 +42,22 @@ defaultDbConf = DbConfig {
   , acqTimeout = 5
   , poolTimeOut = 60
   , poolIdleTime = 300
-}
+  }
 
 
-start :: DbConfig -> ContT r IO Pool
-start dbC =
+startPg :: PgDbConfig -> ContT r IO Hp.Pool
+startPg dbC =
   let
-    dbSettings = DbConn.settings dbC.host dbC.port dbC.user dbC.passwd dbC.dbase
-    -- poolSettings = (dbC.poolSize, dbC.poolTimeOut, settings)
+    dbSettings = Hc.settings dbC.host dbC.port dbC.user dbC.passwd dbC.dbase
+    {-
+    pString :: ByteString
+    pString = "host=" <> dbC.host <> " port=" <> (T.encodeUtf8 . T.pack) (show dbC.port)
+          <> " user=" <> dbC.user <> " password=" <> dbC.passwd <> " dbname=" <> dbC.dbase
+    baseSettings = Hp.settings pString
+    -}
   in do
-  -- liftIO . putStrLn $ "@[start] user: " <> show dbC.user <> " pwd: " <> show dbC.passwd <> "."
-  ContT $ bracket (
-      acquire dbC.poolSize dbC.acqTimeout dbC.poolTimeOut dbSettings
-    ) release
+  -- liftIO . putStrLn $ "@[startPg] user: " <> show dbC.user <> " db: " <> show dbC.dbase <> "."
+  -- 0.10.1:
+  ContT $ bracket (Hp.acquire dbC.poolSize dbC.acqTimeout dbC.poolTimeOut dbC.poolIdleTime dbSettings) Hp.release
+  -- 1.3: ContT $ bracket (Hp.acquire settings) Hp.release
 

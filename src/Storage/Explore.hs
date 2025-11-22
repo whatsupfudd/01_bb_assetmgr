@@ -1,6 +1,6 @@
 {-# LANGUAGE BangPatterns #-}
 
-module Filing.Explore where
+module Storage.Explore where
 
 import Control.Monad (forM_)
 import qualified Control.Exception as Cexc

@@ -1,17 +1,17 @@
-module Options.Runtime (defaultRun, RunOptions (..), DbConfig (..)) where
+module Options.Runtime (defaultRun, RunOptions (..), PgDbConfig (..), defaultPgDbConf) where
 -- import Data.Int (Int)
 
 import Data.Text (Text)
 
-import DB.Connect (DbConfig (..), defaultDbConf)
-import Filing.S3 (S3Config (..), defaultS3Conf)
+import DB.Connect (PgDbConfig (..), defaultPgDbConf)
+import Storage.Types (S3Config (..), defaultS3Conf)
 
 data RunOptions = RunOptions {
     debug :: Int
-    , db :: DbConfig
+    , pgDbConf :: PgDbConfig
     , root :: Text
     , owner :: Text
-    , s3opts :: S3Config
+    , s3store :: Maybe S3Config
   }
   deriving (Show)
 
@@ -19,8 +19,8 @@ defaultRun :: RunOptions
 defaultRun =
   RunOptions {
     debug = 0
-    , db = defaultDbConf
+    , pgDbConf = defaultPgDbConf
     , root = "/tmp"
     , owner = "user"
-    , s3opts = defaultS3Conf
+    , s3store = Nothing
   }

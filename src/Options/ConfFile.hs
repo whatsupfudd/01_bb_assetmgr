@@ -18,15 +18,16 @@ import qualified Data.Yaml as Yaml
 -- import qualified Options.Config as Cnfg
 
 data S3Options = S3Options {
-    user :: Maybe Text
-    , passwd :: Maybe String
-    , host :: Maybe String
-    , bucket :: Maybe Text
+    accessKey :: Maybe Text
+  , secretKey :: Maybe Text
+  , host :: Maybe Text
+  , region :: Maybe Text
+  , bucket :: Maybe Text
   }
   deriving stock (Show, Generic)
 
 
-data DatabaseOpts = DatabaseOpts {
+data PgDbOpts = PgDbOpts {
   port :: Maybe Int
   , host :: Maybe String
   , user :: Maybe String
@@ -41,16 +42,16 @@ data DatabaseOpts = DatabaseOpts {
 data FileOptions = FileOptions {
   debug :: Maybe Int
   , primaryLocale :: Maybe String
-  , db :: Maybe DatabaseOpts
+  , pgDb :: Maybe PgDbOpts
   , rootDir :: Maybe String
   , owner :: Maybe String
-  , s3 :: Maybe S3Options
+  , s3store :: Maybe S3Options
  }
  deriving stock (Show, Generic)
 
 
 defaultConfName :: FilePath
-defaultConfName = "~/fudd/.assetmgr/config.yaml"
+defaultConfName = ".fudd/assetmgr/config.yaml"
 
 
 defaultConfigFilePath :: IO (Either String FilePath)
@@ -63,7 +64,7 @@ defaultConfigFilePath = do
 
 -- YAML support:
 instance Aes.FromJSON FileOptions
-instance Aes.FromJSON DatabaseOpts
+instance Aes.FromJSON PgDbOpts
 instance Aes.FromJSON S3Options
 
 parseFileOptions :: FilePath -> IO (Either String FileOptions)

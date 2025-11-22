@@ -12,23 +12,23 @@ import Data.Vector as Vc
 
 import Hasql.Pool (Pool, use)
 
-import DB.Connect (start)
+import DB.Connect (startPg)
 import qualified Options.Runtime as Rto
-import qualified Filing.Explore as Xpl
+import qualified Storage.Explore as Xpl
 import qualified DB.Opers as Op
 
 type ImportParams = (Text, Text)
 
-importHu :: ImportParams -> Rto.RunOptions -> IO ()
-importHu (taxonomy, path) rtOpts = do
+importCmd :: ImportParams -> Rto.RunOptions -> IO ()
+importCmd (taxonomy, path) rtOpts = do
   if testBit rtOpts.debug 0 then
-    putStrLn $ "@[importHu] starting, opts: " <> show rtOpts
+    putStrLn $ "@[importCmd] starting, opts: " <> show rtOpts
   else
     pure ()
-  runContT (start rtOpts.db) mainAction
+  runContT (startPg rtOpts.pgDbConf) mainAction
   where
   mainAction dbPool = do
-    let shutdownHandler = putStrLn "@[importHu] Terminating..."
+    let shutdownHandler = putStrLn "@[importCmd] Terminating..."
         destDir = unpack $ if isPrefixOf "/" path then
                     path
                   else
@@ -38,18 +38,18 @@ importHu (taxonomy, path) rtOpts = do
     -- DBG:
     parsing <- parseTree tree
     if testBit rtOpts.debug 1 then do
-      putStrLn $ "@[importHu] tree-def: " <> show parsing <> " folder/files."
-      putStrLn $ "@[importHu] root: " <> destDir <> ", tree: " <> show tree
+      putStrLn $ "@[importCmd] tree-def: " <> show parsing <> " folder/files."
+      putStrLn $ "@[importCmd] root: " <> destDir <> ", tree: " <> show tree
     else
       pure ()
     rezA <- getTaxonomy dbPool rtOpts.owner taxonomy
     case rezA of
       Left errMsg ->
-        putStrLn $ "@[importHu] " <> errMsg
+        putStrLn $ "@[importCmd] " <> errMsg
       Right taxoID -> do
         rezB <- use dbPool $ Op.fetchNodesForTaxo taxoID
         case rezB of
-          Left err -> putStrLn $ "@[importHu] fetchNodesForTaxoID err: " <> show err <> "."
+          Left err -> putStrLn $ "@[importCmd] fetchNodesForTaxoID err: " <> show err <> "."
           Right items ->
             if testBit rtOpts.debug 2 then
               let
@@ -60,6 +60,7 @@ importHu (taxonomy, path) rtOpts = do
             else
               putStrLn $ "@[showTree] # items: " <> (show $ Vc.length items)
     pure ()
+
 
 parseTree :: Xpl.RType -> IO (Int, Int)
 parseTree tree =

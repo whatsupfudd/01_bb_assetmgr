@@ -2,12 +2,14 @@
 
 module Options.Cli where
 
+import Data.Int (Int32)
 import Data.Text (Text)
+import qualified Data.Text as T
 import Options.Applicative
 
 
-data EnvOptions = EnvOptions {
-    home :: Maybe Text
+newtype EnvOptions = EnvOptions {
+    appHome :: Maybe Text
   }
 
 data CliOptions = CliOptions {
@@ -28,6 +30,8 @@ data Command =
   | ImportCmd Text Text
   | TestCmd Text
   | IngestCmd Text
+  | ListCmd ListOpts
+  | FetchCmd FetchOpts
   deriving stock (Show)
 
 
@@ -36,9 +40,24 @@ data ImportOpts = ImportOpts {
     , path :: Text
   }
 
-data TestOpts = TestOpts {
+newtype TestOpts = TestOpts {
     subCmd :: Text
   }
+
+data ListOpts = ListOpts {
+    recurse :: Bool
+    , maxDepth :: Int32
+    , owner :: Text
+    , taxonomy :: Text
+  }
+  deriving stock (Show)
+
+data FetchOpts = FetchOpts {
+    nodeID :: Int32
+    , outputFile :: FilePath
+  }
+  deriving stock (Show)
+
 
 parseCliOptions :: IO (Either String CliOptions)
 parseCliOptions =
@@ -91,7 +110,7 @@ globConfFileDef =
       <> showDefault
       <> help "Global debug state."
     )
-  
+
 
 commandDefs :: Mod CommandFields Command
 commandDefs =
@@ -102,14 +121,17 @@ commandDefs =
       , ("import", importOpts, "Loads up a path into BeeBoD.")
       , ("test", testOpts, "Test something on importer.")
       , ("ingest", ingestOpts, "Ingest an image description file from ImgClassifier program.")
+      , ("list", ListCmd <$> listOpts, "Show the content of a taxonomy.")
+      , ("fetch", FetchCmd <$> fetchOpts, "Fetch a node from Beebod.")
       ]
     headArray = head cmdArray
     tailArray = tail cmdArray
   in
-    foldl (\accum aCmd -> (cmdBuilder aCmd) <> accum) (cmdBuilder headArray) tailArray
+    foldl (\accum aCmd -> cmdBuilder aCmd <> accum) (cmdBuilder headArray) tailArray
   where
     cmdBuilder (label, cmdDef, desc) =
       command label (info cmdDef (progDesc desc))
+
 
 importOpts :: Parser Command
 importOpts =
@@ -123,3 +145,26 @@ testOpts =
 ingestOpts :: Parser Command
 ingestOpts =
   IngestCmd <$> strArgument (metavar "FILEPATH" <> help "The path of file to ingest.")
+
+
+listOpts :: Parser ListOpts
+listOpts =
+  ListOpts
+    <$> flag False True (long "recurse" <> short 'r' <> help "Recurse into the taxonomy.")
+    <*> option auto (long "maxdepth" <> short 'm' <> help "Recurse into the taxonomy." <> value 0)
+    <*> strArgument (metavar "OWNER" <> value "" <> help "Owner of taxonomies.")
+    <*> strArgument (metavar "TAXO" <> value "" <> help "Taxonomy where paths are inserted.")
+
+
+fetchOpts :: Parser FetchOpts
+fetchOpts =
+  FetchOpts
+    <$> argument intReader (metavar "NODEID" <> help "Node ID to fetch." <> value 0)
+    <*> strArgument (metavar "OUTPUTFILE" <> value "" <> help "File to write the output to.")
+
+
+intReader :: ReadM Int32
+intReader =
+  eitherReader (\str -> case reads str of
+    [(n, "")] -> Right n
+    _ -> Left "Invalid integer.")

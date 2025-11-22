@@ -1,85 +1,120 @@
 module Options  (
-  module Options.Cli
-  , module Options.ConfFile
-  , module R
+  module Cl
+  , module Fo
+  , module Rt
   , mergeOptions
  )
 where
 
-import qualified Data.Text as DT
-import qualified Data.Text.Encoding as DT
+import Control.Monad.State ( MonadState (put), MonadIO, runStateT, State, StateT, modify, lift, liftIO )
+import Control.Monad.Except ( ExceptT, MonadError (throwError) )
+import Data.Functor.Identity ( Identity (..) )
 
-import qualified DB.Connect as D
-import qualified Filing.S3 as S
+import Data.Foldable (for_)
+import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
 
-import Options.Cli
-import Options.ConfFile
-import qualified Options.Runtime as R
+import qualified System.IO.Error as Serr
+import qualified Control.Exception as Cexc
+import qualified System.Posix.Env as Senv
+import qualified System.Directory as Sdir
 
 
-mergeOptions :: CliOptions -> FileOptions -> EnvOptions -> R.RunOptions
-mergeOptions cli file env =
-  -- TODO: put proper priority filling of values for the Runtime Options.
-  let
-    defO = R.defaultRun
-    -- Update from config file:
-    fileO =
-      let
-        dbgO = case file.debug of
-          Nothing -> defO
-          Just aVal -> defO { R.debug = aVal }
-        dbO = case file.db of
-            Nothing -> dbgO
-            Just aVal ->
-              let
-                portO = case aVal.port of
-                  Nothing -> dbgO.db
-                  Just anInt -> dbgO.db { D.port = fromIntegral anInt }
-                hostO = case aVal.host of
-                  Nothing -> portO
-                  Just aStr -> portO { D.host = DT.encodeUtf8 . DT.pack $ aStr }
-                userO = case aVal.user of
-                  Nothing -> hostO
-                  Just aStr -> hostO { D.user = DT.encodeUtf8 . DT.pack $ aStr }
-                pwdO =  case aVal.passwd of
-                  Nothing -> userO
-                  Just aStr -> userO { D.passwd = DT.encodeUtf8 . DT.pack $ aStr }
-                dbaseO =  case aVal.dbase of
-                  Nothing -> pwdO
-                  Just aStr -> pwdO { D.dbase = DT.encodeUtf8 . DT.pack $ aStr }
-              in
-              dbgO { R.db = dbaseO }
-        rootO = case file.rootDir of
-          Nothing -> dbO
-          Just aVal -> dbO { R.root = DT.pack aVal }
-        ownerO = case file.owner of
-          Nothing -> rootO
-          Just aVal -> rootO { R.owner = DT.pack aVal }
-        s3O = case file.s3 of
-          Nothing -> ownerO
-          Just aVal ->
-            let
-              s3uO = case aVal.user of
-                Nothing -> ownerO.s3opts
-                Just aStr -> ownerO.s3opts { S.user = aStr }
-              s3pO = case aVal.passwd of
-                Nothing -> s3uO
-                Just aStr -> s3uO { S.passwd = aStr }
-              s3hO = case aVal.host of
-                Nothing -> s3pO
-                Just aStr -> s3pO { S.host = aStr }
-              s3bO = case aVal.bucket of
-                Nothing -> s3hO
-                Just aStr -> s3hO { S.bucket = aStr } :: S.S3Config
-            in
-            ownerO { R.s3opts = s3bO }
-      in
-      s3O
-    -- TODO: update from CLI options
-    cliO = case cli.debug of
-      Nothing -> fileO
-      Just aVal -> fileO { R.debug = aVal }
-    -- TODO: update from ENV options
-    envO = cliO
-  in
-  envO
+import qualified Options.Cli as Cl (CliOptions (..), EnvOptions (..))
+import qualified Options.ConfFile as Fo
+import qualified Storage.Types as St (S3Config (..), defaultS3Conf)
+import qualified Options.Runtime as Rt (RunOptions (..), defaultRun, PgDbConfig (..), defaultPgDbConf)
+import qualified DB.Connect as Db
+
+
+type ConfError = Either String ()
+type RunOptSt = State Rt.RunOptions ConfError
+type RunOptIOSt = StateT Rt.RunOptions IO ConfError
+type PgDbOptIOSt = StateT Rt.PgDbConfig (StateT Rt.RunOptions IO) ConfError
+type S3OptIOSt = StateT St.S3Config (StateT Rt.RunOptions IO) ConfError
+
+
+mconf :: MonadState s m => Maybe t -> (t -> s -> s) -> m ()
+mconf mbOpt setter =
+  case mbOpt of
+    Nothing -> pure ()
+    Just opt -> modify $ setter opt
+
+innerConf :: MonadState s f => (t1 -> s -> s) -> (t2 -> StateT t1 f (Either a b)) -> t1 -> Maybe t2 -> f ()
+innerConf updState innerParser defaultVal mbOpt =
+  case mbOpt of
+    Nothing -> pure ()
+    Just anOpt -> do
+      (result, updConf) <- runStateT (innerParser anOpt) defaultVal
+      case result of
+        Left errMsg -> pure ()
+        Right _ -> modify $ updState updConf
+
+
+mergeOptions :: Cl.CliOptions -> Fo.FileOptions -> Cl.EnvOptions -> IO Rt.RunOptions
+mergeOptions cli file env = do
+  appHome <- case T.unpack <$> env.appHome of
+    Nothing -> do
+      eiHomeDir <- Cexc.try Sdir.getHomeDirectory :: IO (Either Serr.IOError FilePath)
+      case eiHomeDir of
+        Left err -> pure ".fudd/assetmgr"
+        Right aVal -> pure $ aVal <> "/.fudd/assetmgr"
+    Just aVal -> pure aVal
+  (result, runtimeOpts) <- runStateT (parseOptions cli file) Rt.defaultRun
+  case result of
+    Left errMsg -> error errMsg
+    Right _ -> pure runtimeOpts
+  where
+  parseOptions :: Cl.CliOptions -> Fo.FileOptions -> RunOptIOSt
+  parseOptions cli file = do
+    mconf file.rootDir $ \nVal s -> s { Rt.root = T.pack nVal }
+    mconf file.owner $ \nVal s -> s { Rt.owner = T.pack nVal }
+    mconf cli.debug $ \nVal s -> s { Rt.debug = nVal }
+    innerConf (\nVal s -> s { Rt.pgDbConf = nVal }) parsePgDb Rt.defaultPgDbConf file.pgDb
+    innerConf (\nVal s -> s { Rt.s3store = Just nVal }) parseS3 St.defaultS3Conf file.s3store
+    pure $ Right ()
+
+
+  parsePgDb :: Fo.PgDbOpts -> PgDbOptIOSt
+  parsePgDb dbO = do
+    mconf dbO.host $ \nVal s -> s { Rt.host = T.encodeUtf8 . T.pack $ nVal }
+    mconf dbO.port $ \nVal s -> s { Rt.port = fromIntegral nVal }
+    mconf dbO.user $ \nVal s -> s { Rt.user = T.encodeUtf8 . T.pack $ nVal }
+    mconf dbO.passwd $ \nVal s -> s { Rt.passwd = T.encodeUtf8 . T.pack $ nVal }
+    mconf dbO.dbase $ \nVal s -> s { Rt.dbase = T.encodeUtf8 . T.pack $ nVal }
+    pure $ Right ()
+
+  parseS3 :: Fo.S3Options -> S3OptIOSt
+  parseS3 s3O = do
+    mconf s3O.accessKey $ \nVal s -> s { St.user = nVal }
+    mconf s3O.secretKey $ \nVal s -> s { St.passwd = nVal }
+    mconf s3O.host $ \nVal s -> s { St.host = nVal }
+    mconf s3O.region $ \nVal s -> s { St.region = nVal }
+    mconf s3O.bucket $ \nVal s -> s { St.bucket = nVal }
+    pure $ Right ()
+
+-- | resolveEnvValue resolves an environment variable value.
+resolveEnvValue :: FilePath -> IO (Maybe FilePath)
+resolveEnvValue aVal =
+  case head aVal of
+      '$' ->
+        let
+          (envName, leftOver) = break ('/' ==) aVal
+        in do
+        mbEnvValue <- Senv.getEnv $ tail envName
+        case mbEnvValue of
+          Nothing -> pure Nothing
+          Just aVal -> pure . Just $ aVal <> leftOver
+      _ -> pure $ Just aVal
+
+resolveValue :: (MonadIO f, MonadState s f) => Maybe String -> (String -> s -> s) -> f ConfError
+resolveValue aVal setter = do
+  case aVal of
+      Nothing -> pure $ Right ()
+      Just aVal -> do
+        mbRezVal <- liftIO $ resolveEnvValue aVal
+        case mbRezVal of
+          Nothing -> pure . Left $ "Could not resolve value: " <> aVal
+          Just aVal -> do
+            modify $ setter aVal
+            pure $ Right ()

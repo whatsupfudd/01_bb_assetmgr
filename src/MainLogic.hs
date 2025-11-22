@@ -4,6 +4,8 @@ where
 import Data.Text (pack, unpack)
 import qualified System.Environment as Env
 
+import qualified Options.Cli as Opt (CliOptions (..), EnvOptions (..), Command (..))
+import qualified Options.ConfFile as Opt (FileOptions (..))
 import qualified Options as Opt
 import Commands as Cmd
 
@@ -17,21 +19,23 @@ runWithOptions cliOptions fileOptions = do
       putStrLn "@[runWithOptions] start on nil command."
     Just aJob -> do
       -- Get environmental context in case it's required in the merge. Done here to keep the merge pure:
-      mbHome <- Env.lookupEnv "BBIMPHOME"
+      mbHome <- Env.lookupEnv "BBAMGRHOME"
       let
         envOptions = Opt.EnvOptions {
-            home = pack <$> mbHome
+            appHome = pack <$> mbHome
             -- TODO: put additional env vars.
           }
-        rtOptions = Opt.mergeOptions cliOptions fileOptions envOptions
         -- switchboard to command executors:
         cmdExecutor =
           case aJob of
             Opt.HelpCmd -> Cmd.helpHu
             Opt.VersionCmd -> Cmd.versionHu
-            Opt.ImportCmd taxo path -> Cmd.importHu (taxo, path)
-            Opt.TestCmd subCmd -> Cmd.testCmd (subCmd)
+            Opt.ImportCmd taxo path -> Cmd.importCmd (taxo, path)
             Opt.IngestCmd filePath -> Cmd.ingestCmd (unpack filePath)
+            Opt.TestCmd subCmd -> Cmd.testCmd subCmd
+            Opt.ListCmd params -> Cmd.listCmd params
+            Opt.FetchCmd params -> Cmd.fetchCmd params
+      rtOptions <- Opt.mergeOptions cliOptions fileOptions envOptions
       result <- cmdExecutor rtOptions
       -- TODO: return a properly kind of conclusion.
       pure ()

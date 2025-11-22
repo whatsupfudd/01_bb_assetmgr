@@ -1,0 +1,162 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.37.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           assetmgr
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/whatsupfudd/assetmgr#readme>
+author:         Hugo DesRosiers
+maintainer:     hugo.desrosiers@boardingcities.com
+copyright:      None.
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    CHANGELOG.md
+
+library
+  exposed-modules:
+      Commands
+      Commands.Fetch
+      Commands.Help
+      Commands.Import
+      Commands.IngestClass
+      Commands.List
+      Commands.Test
+      Commands.Version
+      DB.Connect
+      DB.Opers
+      MainLogic
+      Options
+      Options.Cli
+      Options.ConfFile
+      Options.Runtime
+      Storage.Explore
+      Storage.S3
+      Storage.Types
+  other-modules:
+      Paths_assetmgr
+  hs-source-dirs:
+      src
+  default-extensions:
+      OverloadedStrings
+      DuplicateRecordFields
+      OverloadedRecordDot
+  ghc-options: -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      aeson
+    , base >=4.7 && <5
+    , bytestring
+    , conduit
+    , containers
+    , directory
+    , filepath
+    , gitrev
+    , hasql
+    , hasql-pool
+    , hasql-th
+    , http-client
+    , memory
+    , minio-hs
+    , mtl
+    , optparse-applicative
+    , pathwalk
+    , postgresql-binary
+    , primitive
+    , pureMD5
+    , text
+    , time
+    , unix
+    , unliftio
+    , uuid
+    , vector
+    , yaml
+  default-language: Haskell2010
+
+executable assetmgr
+  main-is: Main.hs
+  other-modules:
+      Paths_assetmgr
+  hs-source-dirs:
+      app
+  default-extensions:
+      OverloadedStrings
+      DuplicateRecordFields
+      OverloadedRecordDot
+  ghc-options: -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson
+    , assetmgr
+    , base >=4.7 && <5
+    , bytestring
+    , conduit
+    , containers
+    , directory
+    , filepath
+    , gitrev
+    , hasql
+    , hasql-pool
+    , hasql-th
+    , http-client
+    , memory
+    , minio-hs
+    , mtl
+    , optparse-applicative
+    , pathwalk
+    , postgresql-binary
+    , primitive
+    , pureMD5
+    , text
+    , time
+    , unix
+    , unliftio
+    , uuid
+    , vector
+    , yaml
+  default-language: Haskell2010
+
+test-suite assetmgr-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_assetmgr
+  hs-source-dirs:
+      test
+  default-extensions:
+      OverloadedStrings
+      DuplicateRecordFields
+      OverloadedRecordDot
+  ghc-options: -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      aeson
+    , assetmgr
+    , base >=4.7 && <5
+    , bytestring
+    , conduit
+    , containers
+    , directory
+    , filepath
+    , gitrev
+    , hasql
+    , hasql-pool
+    , hasql-th
+    , http-client
+    , memory
+    , minio-hs
+    , mtl
+    , optparse-applicative
+    , pathwalk
+    , postgresql-binary
+    , primitive
+    , pureMD5
+    , text
+    , time
+    , unix
+    , unliftio
+    , uuid
+    , vector
+    , yaml
+  default-language: Haskell2010

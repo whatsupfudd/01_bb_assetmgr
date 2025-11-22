@@ -11,6 +11,39 @@ import Hasql.Session (Session, statement)
 import qualified Hasql.TH as TH
 
 
+type TaxoLabelOut = (Text, Int32, Text)
+fetchTaxos :: Session (Vector TaxoLabelOut)
+fetchTaxos =
+  statement () [TH.vectorStatement|
+    select
+      a.label::text, a.id::int4, b.internalname::text
+    from taxo.catalogs as a
+    join taxo.owners b on a.ownerid = b.id
+  |]
+
+
+fetchTaxosForOwner :: Int32 -> Session (Vector (Text, Int32, Text))
+fetchTaxosForOwner ownerID =
+  statement ownerID [TH.vectorStatement|
+    select
+      a.label::text, a.id::int4, b.internalname::text
+    from taxo.catalogs as a
+    join taxo.owners b on a.ownerid = b.id
+    where a.ownerid = $1::int4
+  |]
+
+fetchTaxosForOwnerLabel :: (Text, Text) -> Session (Maybe Int32)
+fetchTaxosForOwnerLabel (owner, label) =
+  statement (owner, label) [TH.maybeStatement|
+    select
+      a.id::int4
+    from taxo.catalogs a
+    join taxo.owners b on a.ownerid = b.id
+    where a.label = $2::text
+          and b.internalname = $1::text
+  |]
+
+
 -- id, ownerid
 type TaxoOut = (Int32, Int32)
 fetchTaxoByLabel :: (Text, Text) -> Session (Maybe TaxoOut)
@@ -19,7 +52,7 @@ fetchTaxoByLabel params =
     select
       a.id::int4, b.id::int4
     from taxo.catalogs a
-      join owners b on a.ownerid = b.id
+      join taxo.owners b on a.ownerid = b.id
     where a.label = $2::text
           and b.internalname = $1::text
   |]
@@ -48,15 +81,26 @@ addTaxonomy params =
   |]
 
 
+type RootOut = (Text, Int32)
+fetchRootsForTaxo :: Int32 -> Session (Vector RootOut)
+fetchRootsForTaxo taxoID =
+  statement taxoID [TH.vectorStatement|
+    select a.label::text, a.id::int4
+      from taxo.nodes a
+      where a.arboid = $1::int4
+        and a.parentid is null
+  |]
+
+
 -- path, top-level id, depth:
 type PathOut = (Text, Int32, Int32)
 fetchPathForNode :: Int32 -> Session (Vector PathOut)
 fetchPathForNode taxoID =
   statement taxoID [TH.vectorStatement|
     with recursive pathup as (
-      select label, id, parentid, label || ';' as tpath, 1 as depth
-        from taxo.nodes
-        where id = $1::int4
+      select a.label, a.id, a.parentid, a.label || ';' as tpath, 1 as depth
+        from taxo.nodes a
+        where a.id = $1::int4
       union all
        select nd.label, nd.id, nd.parentid, nd.label || '/' || pu.tpath as tpath, pu.depth+1 as depth
          from taxo.nodes as nd
@@ -64,8 +108,25 @@ fetchPathForNode taxoID =
     ) select tpath::varchar::text, id::int4, depth::int4 from pathup order by depth desc limit 1
   |]
 
--- top-level id, label, parentID, md5ID, lastMod, depth:
+
 type NodeOut = (Int32, Text, Maybe Int32, Maybe Int32, Maybe UTCTime, Int32)
+fetchNodesForTaxoLimited :: Int32 -> Int32 -> Session (Vector NodeOut)
+fetchNodesForTaxoLimited taxoID maxDepth =
+  statement (taxoID, maxDepth) [TH.vectorStatement|
+  with recursive xtree as (
+    select id, label, parentid, assetid, lastmod, 1 as depth
+      from taxo.nodes
+      where arboid = $1::int4 and parentid is null
+    union all
+     select nd.id, nd.label, nd.parentid, nd.assetid, nd.lastmod, xt.depth+1 as depth
+       from taxo.nodes as nd
+        inner join xtree xt on xt.id = nd.parentid
+      where depth <= $2::int4
+    ) select id::int4, label::text, parentid::int4?, assetid::int4?, lastmod::timestamptz?, depth::int4 from xtree
+  |]
+
+
+-- top-level id, label, parentID, md5ID, lastMod, depth:
 fetchNodesForTaxo :: Int32 -> Session (Vector NodeOut)
 fetchNodesForTaxo taxoID =
   statement taxoID [TH.vectorStatement|
@@ -80,6 +141,18 @@ fetchNodesForTaxo taxoID =
     ) select id::int4, label::text, parentid::int4?, assetid::int4?, lastmod::timestamptz?, depth::int4 from xtree
   |]
 
+
+type NodeInfoOut = (Text, Maybe Int32, Maybe UTCTime, Maybe Text, Maybe Int64, Maybe Text, Maybe UTCTime)
+fetchNodeInfo :: Int32 -> Session (Maybe NodeInfoOut)
+fetchNodeInfo nodeID =
+  statement nodeID [TH.maybeStatement|
+    select
+      a.label::text, a.parentid::int4?, a.lastmod::timestamptz?
+      , b.md5::text?, b.size::int8?, b.locator::text?, b.lastmod::timestamptz?
+      from taxo.nodes a
+      join data.assets b on a.assetid = b.id
+    where a.id = $1::int4
+  |]
 
 -- md5 : string -> text, size : int64 -> bigint, locator: s3-path -> varchar
 

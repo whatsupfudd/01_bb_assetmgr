@@ -6,7 +6,8 @@ resolver:
 packages:
 - .
 
-# extra-deps: []
+extra-deps:
+  - ../../../../Haskell/Minio/minio-hs
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
