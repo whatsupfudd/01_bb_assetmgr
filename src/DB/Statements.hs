@@ -1,6 +1,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 
-module DB.Opers where
+module DB.Statements where
 
 import Data.Int (Int16, Int32, Int64)
 import Data.Text (Text)

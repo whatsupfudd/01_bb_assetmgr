@@ -44,6 +44,8 @@ dependencies:
   - hasql
   - hasql-th
   - hasql-pool
+  - hasql-transaction
+  - profunctors
   # For MD5:
   - pureMD5
   - vector

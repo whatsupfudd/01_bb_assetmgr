@@ -1,9 +1,10 @@
+{-# LANGUAGE BangPatterns #-}
 module Commands.List where
 
 import Control.Monad.Cont (runContT)
 
 import Data.Int (Int32)
-import Data.Time (UTCTime)
+import Data.Time (UTCTime, getCurrentTime, diffUTCTime)
 import qualified Data.Map.Strict as Mp
 import Data.Maybe (fromMaybe)
 import Data.Text (Text, unpack, pack)
@@ -13,12 +14,12 @@ import Numeric (showHex)
 import Hasql.Pool (Pool, use)
 
 import qualified DB.Connect as Db
-import qualified DB.Opers as Do
+import qualified DB.Statements as Do
 import qualified Options.Runtime as Rto
 
 import Options.Cli (ListOpts (..))
-import DB.Opers (NodeOut)
-import qualified Commands.Import as Ci
+import DB.Statements (NodeOut)
+import qualified Tree.Logic as Tl
 
 data ListResult =
   Triplet (Vc.Vector Do.TaxoLabelOut)
@@ -65,7 +66,10 @@ listCmd params rtOpts = do
                         Left err -> pure . Left $ "@[listCmd] fetchRootsForTaxo err: " <> show err
                         Right items -> pure . Right . Taxo $ items
                     _ -> do
+                      startTime <- getCurrentTime
                       rezG <- use dbPool $ Do.fetchNodesForTaxoLimited taxoID params.maxDepth
+                      endTime <- getCurrentTime
+                      putStrLn $ "@[listCmd] fetchTaxosForOwnerLabel time: " <> show (diffUTCTime endTime startTime)
                       case rezG of
                         Left err -> pure . Left $ "@[listCmd] fetchNodesForTaxoLimited err: " <> show err
                         Right items -> pure . Right . Nodes $ items
@@ -78,9 +82,14 @@ listCmd params rtOpts = do
         Nodes items -> do
           -- id::int4, label::text, parentid::int4?, assetid::int4?, lastmod::timestamptz?, depth::int4
           putStrLn $ "@[listCmd] items: id\tlabel\tparentID\tassetID\tlastMod\tdepth"
+          startTime <- getCurrentTime
           let
-            (tree, dbgInfo) = Ci.treeFromNodes items
-          Ci.showTree items tree dbgInfo
+            (!tree, !dbgInfo) = Tl.treeFromNodes items
+            !nbrTreeNodes = Tl.sizeTree tree
+          midTime <- getCurrentTime
+          Tl.showTree items tree dbgInfo
+          endTime <- getCurrentTime
+          putStrLn $ "@[listCmd] treeFromNodes time: " <> show (diffUTCTime midTime startTime) <> ", showTree time: " <> show (diffUTCTime endTime midTime)
           -- mapM_ (\(id, label, parentID, assetID, lastMod, depth) -> putStrLn $ show id <> "\t" <> show label <> "\t" <> show parentID <> "\t" <> show assetID <> "\t" <> show lastMod <> "\t" <> show depth) items
     pure ()
 

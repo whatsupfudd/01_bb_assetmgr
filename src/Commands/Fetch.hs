@@ -8,7 +8,7 @@ import Hasql.Pool (Pool, use)
 
 import qualified Storage.S3 as S3
 import qualified DB.Connect as Db
-import qualified DB.Opers as Do
+import qualified DB.Statements as Do
 import qualified Options.Runtime as Rto
 
 import Options.Cli (FetchOpts (..))
