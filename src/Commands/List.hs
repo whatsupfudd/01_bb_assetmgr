@@ -84,10 +84,11 @@ listCmd params rtOpts = do
           putStrLn $ "@[listCmd] items: id\tlabel\tparentID\tassetID\tlastMod\tdepth"
           startTime <- getCurrentTime
           let
-            (!tree, !dbgInfo) = Tl.treeFromNodes items
+            -- (!tree, !dbgInfo) = Tl.treeFromNodes items
+            tree = Tl.buildForestMapV items
             !nbrTreeNodes = Tl.sizeTree tree
           midTime <- getCurrentTime
-          Tl.showTree items tree dbgInfo
+          Tl.showTree items tree Tl.defaultDebugInfo
           endTime <- getCurrentTime
           putStrLn $ "@[listCmd] treeFromNodes time: " <> show (diffUTCTime midTime startTime) <> ", showTree time: " <> show (diffUTCTime endTime midTime)
           -- mapM_ (\(id, label, parentID, assetID, lastMod, depth) -> putStrLn $ show id <> "\t" <> show label <> "\t" <> show parentID <> "\t" <> show assetID <> "\t" <> show lastMod <> "\t" <> show depth) items

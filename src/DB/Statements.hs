@@ -2,7 +2,10 @@
 
 module DB.Statements where
 
+import qualified Data.Foldable as Fld
+import qualified Data.Vector as V
 import Data.Int (Int16, Int32, Int64)
+import qualified Data.Sequence as Seq
 import Data.Text (Text)
 import Data.Time (UTCTime)
 import Data.Vector (Vector)
@@ -108,7 +111,7 @@ fetchPathForNode taxoID =
     ) select tpath::varchar::text, id::int4, depth::int4 from pathup order by depth desc limit 1
   |]
 
-
+-- id, label, parentID, assetID, lastMod, depth:
 type NodeOut = (Int32, Text, Maybe Int32, Maybe Int32, Maybe UTCTime, Int32)
 fetchNodesForTaxoLimited :: Int32 -> Int32 -> Session (Vector NodeOut)
 fetchNodesForTaxoLimited taxoID maxDepth =
@@ -154,11 +157,22 @@ fetchNodeInfo nodeID =
     where a.id = $1::int4
   |]
 
+
+fetchAssetsByMD5 :: Seq.Seq Text -> Session (Vector (Text, Int32))
+fetchAssetsByMD5 assetBlock =
+  statement (V.fromList $ Fld.toList assetBlock) [TH.vectorStatement|
+    select
+      b.md5::text, b.id::int4
+    from data.assets b
+    where b.md5 = any($1::text[])
+  |]
+
+
 -- md5 : string -> text, size : int64 -> bigint, locator: s3-path -> varchar
 
 type NewAssetIn = (Text, Int64, Text)
 type NewAssetOut = (Int32, UTCTime)
-insertAsset :: NewAssetIn -> Session (NewAssetOut)
+insertAsset :: NewAssetIn -> Session NewAssetOut
 insertAsset params =
   statement params [TH.singletonStatement|
     insert into data.assets
@@ -168,13 +182,13 @@ insertAsset params =
   |]
 
 -- label, parentid, assetid, lastmod, rights, arboid
-type NewNodeIn = (Text, Maybe Int32, Maybe Int32, Int64, Int16, Int32)
-type NewNodeOut = (Int32)
+type NewNodeIn = (Text, Maybe Int32, Maybe Int32, Int64, Text, Int32)
+type NewNodeOut = (Int32, UTCTime)
 insertNode :: NewNodeIn -> Session NewNodeOut
 insertNode params =
   statement params [TH.singletonStatement|
     insert into taxo.nodes
       (label, parentid, assetid, lastmod, rights, arboid)
-      values ($1::text, $2::int4?, $3::int4?, from_unixtime($4::int8), $5::int2, $6::int4)
-    returning id::int4
+      values ($1::text, $2::int4?, $3::int4?, to_timestamp($4::int8), $5::text, $6::int4)
+    returning id::int4, to_timestamp($4::int8)::timestamptz
   |]

@@ -9,7 +9,7 @@ import Storage.Types (S3Config (..), defaultS3Conf)
 data RunOptions = RunOptions {
     debug :: Int
     , pgDbConf :: PgDbConfig
-    , root :: Text
+    , root :: Maybe FilePath
     , owner :: Text
     , s3store :: Maybe S3Config
   }
@@ -20,7 +20,7 @@ defaultRun =
   RunOptions {
     debug = 0
     , pgDbConf = defaultPgDbConf
-    , root = "/tmp"
+    , root = Nothing
     , owner = "user"
     , s3store = Nothing
   }

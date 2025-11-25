@@ -1,15 +1,16 @@
 module Tree.Types where
 
 import qualified Data.Map.Strict as Mp
+import qualified Data.IntMap.Strict as Mi
 import Data.Int (Int32)
 
 import qualified DB.Statements as Op
 
-type FolderMap element = Mp.Map Int32 (FolderTree element)
+type FolderMap element = Mi.IntMap (FolderTree element)
 
 data FolderTree element =
-  FolderFT (FDetails element)
-  | LeafFT element
+  FolderFT !(FDetails element)
+  | LeafFT !element
   | EmptyFT
   deriving (Show)
 

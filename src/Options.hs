@@ -67,7 +67,8 @@ mergeOptions cli file env = do
   where
   parseOptions :: Cl.CliOptions -> Fo.FileOptions -> RunOptIOSt
   parseOptions cli file = do
-    mconf file.rootDir $ \nVal s -> s { Rt.root = T.pack nVal }
+    mconf file.debug $ \nVal s -> s { Rt.debug = nVal }
+    mconf file.rootDir $ \nVal s -> s { Rt.root = Just nVal }
     mconf file.owner $ \nVal s -> s { Rt.owner = T.pack nVal }
     mconf cli.debug $ \nVal s -> s { Rt.debug = nVal }
     innerConf (\nVal s -> s { Rt.pgDbConf = nVal }) parsePgDb Rt.defaultPgDbConf file.pgDb

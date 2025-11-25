@@ -30,7 +30,7 @@ runWithOptions cliOptions fileOptions = do
           case aJob of
             Opt.HelpCmd -> Cmd.helpHu
             Opt.VersionCmd -> Cmd.versionHu
-            Opt.ImportCmd taxo path -> Cmd.importCmd (taxo, path)
+            Opt.ImportCmd params -> Cmd.importCmd params
             Opt.IngestCmd filePath -> Cmd.ingestCmd (unpack filePath)
             Opt.TestCmd subCmd -> Cmd.testCmd subCmd
             Opt.ListCmd params -> Cmd.listCmd params

@@ -4,16 +4,16 @@ module Storage.Explore where
 
 import Control.Monad (forM_)
 import qualified Control.Exception as Cexc
+
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.Char as DC
 import Data.Int (Int64)
 import Data.List (isSuffixOf)
+import qualified Data.Sequence as Seq
 import Data.Word (Word16)
 import Data.Digest.Pure.MD5
 
 -- import Data.List.Split (splitOn, splitOneOf)
-import qualified Data.Vector as Vc
-import qualified Data.Sequence as Seq
 import qualified System.Directory.PathWalk as Wlk
 import System.FilePath (joinPath)
 import qualified System.IO.Error as Serr
@@ -27,11 +27,18 @@ data FileInfo = FileInfo {
     , md5h :: !String
     , size :: {-# UNPACK #-} !Int64
     , modifTime :: {-# UNPACK #-} !Int64
-    , perms :: !Word16
+    , perms :: !CMode
   }
   deriving Show
 
-type RType = Seq.Seq (FilePath, [Either String FileInfo])
+data DirInfo = DirInfo {
+    pathDI :: !FilePath
+    , modifTimeDI :: {-# UNPACK #-} !Int64
+    , permsDI :: !CMode
+  }
+  deriving Show
+
+type RType = Seq.Seq (DirInfo, [Either String FileInfo])
 
 loadFolderTree :: FilePath -> IO RType
 loadFolderTree rootPath = do
@@ -52,8 +59,17 @@ loadFolderTree rootPath = do
 
 filesAnalyser :: Int -> FilePath -> [ FilePath ] -> [[Char]] -> IO RType
 filesAnalyser pLen root dirs files = do
+  dirStatus <- getFileStatus root
+  let
+    CTime mTime = modificationTime dirStatus
+    fStatus = fileMode dirStatus
+    dirInfo = DirInfo {
+      pathDI = drop pLen root
+      , modifTimeDI = mTime
+      , permsDI = fStatus
+    }
   md5Info <- mapM (hashCalc root) files
-  pure $ Seq.singleton (drop pLen root, md5Info)
+  pure $ Seq.singleton (dirInfo, md5Info)
 
 
 hashCalc :: FilePath -> FilePath -> IO (Either String FileInfo)
@@ -69,7 +85,7 @@ hashCalc prefix filePath =
     fileStatus <- getFileStatus fullFilePath
     let
       !md5Val = show . md5 $ fileContent
-      CMode fStatus = fileMode fileStatus
+      fStatus = fileMode fileStatus
       COff fSize = fileSize fileStatus
       CTime mTime = modificationTime fileStatus
     pure . Right $ FileInfo {
@@ -78,3 +94,27 @@ hashCalc prefix filePath =
       }
   else
     pure . Left $ "@[hashCalc] no file: " <> filePath
+
+
+parseTree :: RType -> IO (Int, Int)
+parseTree tree =
+  -- TODO: get the md5 of the files, date of last mod
+  pure $ Prelude.foldl (\(folderCount, fileCount) (fPath, files) -> (folderCount + 1, fileCount + Prelude.length files)) (0, 0) tree
+
+showTree :: RType -> IO ()
+showTree tree = do
+  putStrLn $ "@[showTree] tree:\n"
+  Prelude.mapM_ showTreeItem tree
+
+showTreeItem :: (DirInfo, [Either String FileInfo]) -> IO ()
+showTreeItem (fPath, files) = do
+  putStrLn $ "--- fPath: " <> fPath.pathDI
+  Prelude.mapM_ showFileInfo files
+
+showFileInfo :: Either String FileInfo -> IO ()
+showFileInfo (Left err) = do
+  putStrLn $ "@[showFileInfo] err: " <> err
+  pure ()
+showFileInfo (Right fileInfo) = do
+  putStrLn $ "    " <> show fileInfo
+  pure ()

@@ -27,7 +27,7 @@ data GlobalOptions = GlobalOptions {
 data Command =
   HelpCmd
   | VersionCmd
-  | ImportCmd Text Text
+  | ImportCmd ImportOpts
   | TestCmd Text
   | IngestCmd Text
   | ListCmd ListOpts
@@ -37,8 +37,10 @@ data Command =
 
 data ImportOpts = ImportOpts {
     taxonomy :: Text
-    , path :: Text
+    , path :: FilePath
+    , anchor :: FilePath
   }
+  deriving stock (Show)
 
 newtype TestOpts = TestOpts {
     subCmd :: Text
@@ -118,7 +120,7 @@ commandDefs =
     cmdArray = [
       ("help", pure HelpCmd, "Help about any command.")
       , ("version", pure VersionCmd, "Shows the version number of importer.")
-      , ("import", importOpts, "Loads up a path into BeeBoD.")
+      , ("import", ImportCmd <$> importOpts, "Loads up a path into BeeBoD.")
       , ("test", testOpts, "Test something on importer.")
       , ("ingest", ingestOpts, "Ingest an image description file from ImgClassifier program.")
       , ("list", ListCmd <$> listOpts, "Show the content of a taxonomy.")
@@ -133,10 +135,11 @@ commandDefs =
       command label (info cmdDef (progDesc desc))
 
 
-importOpts :: Parser Command
+importOpts :: Parser ImportOpts
 importOpts =
-  ImportCmd <$> strArgument (metavar "TAXO" <> help "Taxonomy root where paths are inserted.")
+  ImportOpts <$> strArgument (metavar "TAXO" <> help "Taxonomy root where paths are inserted.")
     <*> strArgument (metavar "PATH" <> help "Directory to import into Beebod.")
+    <*> strArgument (metavar "ROOT" <> help "Anchor path in the taxo for the import tree." <> value "" <> showDefault)
 
 testOpts :: Parser Command
 testOpts =
