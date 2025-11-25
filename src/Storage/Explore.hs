@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Storage.Explore where
 
@@ -7,20 +8,22 @@ import qualified Control.Exception as Cexc
 
 import qualified Data.ByteString.Lazy as LB
 import qualified Data.Char as DC
+import Data.Either (rights)
 import Data.Int (Int64)
 import Data.List (isSuffixOf)
 import qualified Data.Sequence as Seq
 import Data.Word (Word16)
 import Data.Digest.Pure.MD5
 
--- import Data.List.Split (splitOn, splitOneOf)
 import qualified System.Directory.PathWalk as Wlk
 import System.FilePath (joinPath)
 import qualified System.IO.Error as Serr
 import System.Directory (doesPathExist)
 import System.Posix.Files (getFileStatus, fileSize, fileMode, modificationTime)
 import System.Posix.Types (COff (..), CMode (..))
+
 import Foreign.C.Types (CTime (..))
+
 
 data FileInfo = FileInfo {
     lpathFI :: !FilePath
@@ -32,6 +35,7 @@ data FileInfo = FileInfo {
   }
   deriving Show
 
+
 data DirInfo = DirInfo {
     lpathDI :: !FilePath
     , rootLengthDI :: !Int
@@ -40,6 +44,7 @@ data DirInfo = DirInfo {
     , permsDI :: !CMode
   }
   deriving Show
+
 
 type RType = Seq.Seq (DirInfo, [Either String FileInfo])
 
@@ -106,10 +111,12 @@ parseTree tree =
   -- TODO: get the md5 of the files, date of last mod
   pure $ Prelude.foldl (\(folderCount, fileCount) (fPath, files) -> (folderCount + 1, fileCount + Prelude.length files)) (0, 0) tree
 
+
 showTree :: RType -> IO ()
 showTree tree = do
   putStrLn $ "@[showTree] tree:\n"
   Prelude.mapM_ showTreeItem tree
+
 
 showTreeItem :: (DirInfo, [Either String FileInfo]) -> IO ()
 showTreeItem (fPath, files) = do
@@ -118,10 +125,12 @@ showTreeItem (fPath, files) = do
   putStrLn $ "--- fPath: " <> shortPath
   Prelude.mapM_ showFileInfo files
 
+
 showFileInfo :: Either String FileInfo -> IO ()
-showFileInfo (Left err) = do
-  putStrLn $ "@[showFileInfo] err: " <> err
-  pure ()
-showFileInfo (Right fileInfo) = do
-  putStrLn $ "    " <> show fileInfo
-  pure ()
+showFileInfo = \case
+  Left err -> putStrLn $ "@[showFileInfo] err: " <> err
+  Right fileInfo -> putStrLn $ "    " <> show fileInfo
+
+
+treeSize :: RType -> Int
+treeSize = Prelude.foldl (\acc (_, files) -> acc + Prelude.length (rights files)) 0

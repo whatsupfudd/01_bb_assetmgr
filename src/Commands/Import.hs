@@ -103,7 +103,7 @@ loadFileTree dbPool s3Conn rtOpts taxonomy mbAnchorPath fsTree = do
             let
               assetMap = Mp.unions idMaps
             in do
-            putStrLn $ "@[importCmd] existing assets: " <> show assetMap <> "."
+            putStrLn $ "@[importCmd] found " <> show (Mp.size assetMap) <> " existing assets."
             if newFlag then
               addFilesToTaxo dbPool s3Conn rtOpts taxoID assetMap fsTree
             else
@@ -153,47 +153,36 @@ appendFilesToTaxo dbPool s3Conn rtOpts taxoID assetMap fsTree = do
         namedDirMap = convFolderMapToNamedDirMap treeMap
       in do
       -- putStrLn $ "@[appendFilesToTaxo] namedDirMap: " <> show namedDirMap
+      putStrLn $ "@[appendFilesToTaxo] fsTree size: " <> show (Xpl.treeSize fsTree) <> "."
       storeRez <- storeToTaxo dbPool s3Conn rtOpts taxoID assetMap namedDirMap fsTree
       case storeRez of
         Left err -> putStrLn $ "@[appendFilesToTaxo] storeToTaxo err: " <> show err <> "."
         Right namedDirMap -> do
-          putStrLn $ "@[appendFilesToTaxo] storeToTaxo success."
-          pure ()
-      pure ()
-  pure ()
+          putStrLn "@[appendFilesToTaxo] storeToTaxo success."
 
 
-{-
-data FileInfo = FileInfo {
-    path :: !FilePath
-    , md5h :: !String
-    , size :: {-# T.unpack #-} !Int64
-    , modifTime :: {-# T.unpack #-} !Int64
-    , perms :: !Word16
-  }
-  deriving Show
-
-type RType = Seq.Seq (FilePath, [Either String FileInfo])
--}
-
-storeToTaxo :: Pool -> S3.S3Conn -> Rto.RunOptions -> Int32 -> Mp.Map Text Int32 -> NamedDirMap St.NodeOut -> Xpl.RType -> IO (Either String (NamedDirMap St.NodeOut))
-storeToTaxo dbPool s3Conn rtOpts taxoID assets namedDirMap fsTree = do
+storeToTaxo :: Pool -> S3.S3Conn -> Rto.RunOptions -> Int32 -> Mp.Map Text Int32 -> NamedDirMap St.NodeOut -> Xpl.RType -> IO (Either String (NamedDirMap St.NodeOut, Mp.Map Text Int32))
+storeToTaxo dbPool s3Conn rtOpts taxoID assetMap namedDirMap fsTree = do
   -- putStrLn $ "@[storeFilesToTaxo] fsTree: " <> show fsTree
   foldM (\accum aNode ->
     case accum of
       Left err -> pure $ Left err
-      Right aMap -> do
-        rezA <- storeDirToTaxo dbPool rtOpts taxoID assets aMap aNode
+      Right (dirMap, iterAssetMap) -> do
+        rezA <- storeDirToTaxo dbPool rtOpts taxoID iterAssetMap dirMap aNode
         case rezA of
           Left err -> pure $ Left err
           Right (newNodeID, updDirMap) -> do
-            rezB <- storeFilesToTaxo dbPool s3Conn rtOpts assets taxoID newNodeID (snd aNode)
+            rezB <- storeFilesToTaxo dbPool s3Conn rtOpts iterAssetMap taxoID newNodeID (snd aNode)
             case rezB of
               Left err -> pure $ Left err
-              Right newFileIDs ->
-                pure $ Right updDirMap
-            pure $ Right updDirMap
-    ) (Right namedDirMap) fsTree
+              Right newValues ->
+                let
+                  newAssetMap = Mp.fromList [fst aValue | aValue <- newValues]
+                in do
+                putStrLn $ "@[storeToTaxo] newAssetMap: " <> show newAssetMap <> "."
+                pure $ Right (updDirMap, iterAssetMap <> newAssetMap)
+    ) (Right (namedDirMap, assetMap)) fsTree
+
 
 storeDirToTaxo :: Pool -> Rto.RunOptions -> Int32 -> Mp.Map Text Int32 -> NamedDirMap St.NodeOut -> (Xpl.DirInfo, [Either String Xpl.FileInfo])
     -> IO (Either String (Int32, NamedDirMap St.NodeOut))
@@ -365,39 +354,54 @@ derefPath (accum, leftOver) treeMap subPaths =
         derefPath (accum <> [(aName, nodeID)], leftOver) ndNode.children rest
 
 
-storeFilesToTaxo :: Pool -> S3.S3Conn -> Rto.RunOptions -> Mp.Map Text Int32 -> Int32 -> Int32 -> [Either String Xpl.FileInfo] -> IO (Either String [(Int32, Int32)])
+storeFilesToTaxo :: Pool -> S3.S3Conn -> Rto.RunOptions -> Mp.Map Text Int32 -> Int32 -> Int32 -> [Either String Xpl.FileInfo] -> IO (Either String [((Text, Int32), Int32)])
 storeFilesToTaxo dbPool s3Conn rtOpts assetMap taxoID dirNodeID files = do
   -- putStrLn $ "@[storeFilesToTaxo] files: " <> show files
-  fullRez <- mapM (\case
-      Left err -> pure . Left $ "@[storeFilesToTaxo] file err: " <> show err <> "."
-      Right fileInfo -> do
-        eiAssetID <- case Mp.lookup (T.pack fileInfo.md5hFI) assetMap of
-            Just assetID -> pure $ Right assetID
-            Nothing -> do
-              -- putStrLn $ "@[storeFilesToTaxo] uploading asset: " <> show fileInfo.lpathFI <> " (md5: " <> show fileInfo.md5hFI <> ")."
-              eiS3Info <- uploadAsset dbPool s3Conn rtOpts taxoID fileInfo
-              case eiS3Info of
-                Left err -> pure $ Left err
-                Right s3Info -> do
-                  -- putStrLn $ "@[storeFilesToTaxo] adding asset: " <> show s3Info <> "."
-                  Do.addAsset dbPool fileInfo s3Info
-        case eiAssetID of
-          Left err -> do
-            -- putStrLn $ "@[storeFilesToTaxo] adding asset for file: " <> show fileInfo.lpathFI <> " failed: " <> show err <> "."
-            pure $ Left err
-          Right assetID -> do
-            -- putStrLn $ "@[storeFilesToTaxo] adding to dir: " <> show dirNodeID <> ", assetID: " <> show assetID <> "."
-            eiFileRez <- Do.addFileToTaxo dbPool taxoID dirNodeID assetID fileInfo
-            case eiFileRez of
-              Left err -> do
-                putStrLn $ "@[storeFilesToTaxo] adding file to taxo for file: "
-                  <> show fileInfo.lpathFI <> ", assetID: " <> show assetID <> " failed: " <> show err <> "."
-                pure $ Left err
-              Right fileID -> pure $ Right (assetID, fileID)
-    ) files
-  case lefts fullRez of
-    [] -> pure . Right . rights $ fullRez
-    errs -> pure . Left $ "@[storeFilesToTaxo] errs: " <> L.intercalate " | " errs <> "."
+  fullRez <- Ex.runExceptT $ foldM (saveLoop dbPool s3Conn rtOpts taxoID) (assetMap, []) files
+  case fullRez of
+    Right (_, resultList) -> pure . Right $ resultList
+    Left err -> pure . Left $ "@[storeFilesToTaxo] err: " <> err <> "."
+  where
+  saveLoop :: Pool -> S3.S3Conn -> Rto.RunOptions -> Int32 -> (Mp.Map Text Int32, [((Text, Int32), Int32)]) -> Either String Xpl.FileInfo -> Ex.ExceptT String IO (Mp.Map Text Int32, [((Text, Int32), Int32)])
+  saveLoop dbPool s3Conn rtOpts taxoID (assetMap, iterFiles) = \case
+    Left err -> Ex.ExceptT $ pure . Left $ "@[storeFilesToTaxo] file err: " <> show err <> "."
+    Right fileInfo ->
+      let
+        tMd5h = T.pack fileInfo.md5hFI
+      in do
+      eiAssetID <- liftIO $ case Mp.lookup tMd5h assetMap of
+          Just assetID -> pure $ Right (assetID, False)
+          Nothing -> do
+            -- putStrLn $ "@[storeFilesToTaxo] uploading asset: " <> show fileInfo.lpathFI <> " (md5: " <> show fileInfo.md5hFI <> ")."
+            eiS3Info <- liftIO $ uploadAsset dbPool s3Conn rtOpts taxoID fileInfo
+            case eiS3Info of
+              Left err -> pure $ Left err
+              Right s3Info -> do
+                -- putStrLn $ "@[storeFilesToTaxo] adding asset: " <> show s3Info <> "."
+                assetAddRez <- liftIO $ Do.addAsset dbPool fileInfo s3Info
+                case assetAddRez of
+                  Left err -> pure $ Left err
+                  Right assetID -> pure $ Right (assetID, True)
+      case eiAssetID of
+        Left err -> do
+          -- putStrLn $ "@[storeFilesToTaxo] adding asset for file: " <> show fileInfo.lpathFI <> " failed: " <> show err <> "."
+          Ex.ExceptT $ pure $ Left err
+        Right (assetID, newFlag) -> do
+          -- putStrLn $ "@[storeFilesToTaxo] adding to dir: " <> show dirNodeID <> ", assetID: " <> show assetID <> "."
+          eiFileRez <- liftIO $ Do.addFileToTaxo dbPool taxoID dirNodeID assetID fileInfo
+          case eiFileRez of
+            Left err -> do
+              liftIO $ putStrLn $ "@[storeFilesToTaxo] adding file to taxo for file: "
+                <> show fileInfo.lpathFI <> ", assetID: " <> show assetID <> " failed: " <> show err <> "."
+              Ex.ExceptT $ pure $ Left err
+            Right fileID ->
+              let
+                updAssetMap = if newFlag then
+                   Mp.insert tMd5h assetID assetMap
+                  else
+                    assetMap
+              in
+              Ex.ExceptT . pure . Right $ (updAssetMap, iterFiles <> [((tMd5h, assetID), fileID)])
 
 
 uploadAsset :: Pool -> S3.S3Conn -> Rto.RunOptions -> Int32 -> Xpl.FileInfo -> IO (Either String (Text, Int64))
