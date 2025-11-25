@@ -74,6 +74,7 @@ library
     , pureMD5
     , text
     , time
+    , transformers
     , unix
     , unliftio
     , uuid
@@ -118,6 +119,7 @@ executable assetmgr
     , pureMD5
     , text
     , time
+    , transformers
     , unix
     , unliftio
     , uuid
@@ -163,6 +165,7 @@ test-suite assetmgr-test
     , pureMD5
     , text
     , time
+    , transformers
     , unix
     , unliftio
     , uuid

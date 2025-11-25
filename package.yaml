@@ -61,6 +61,7 @@ dependencies:
   - primitive
   - memory
   - uuid
+  - transformers
 
 
 default-extensions:

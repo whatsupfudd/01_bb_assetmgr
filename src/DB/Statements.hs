@@ -158,9 +158,9 @@ fetchNodeInfo nodeID =
   |]
 
 
-fetchAssetsByMD5 :: Seq.Seq Text -> Session (Vector (Text, Int32))
+fetchAssetsByMD5 :: V.Vector Text -> Session (Vector (Text, Int32))
 fetchAssetsByMD5 assetBlock =
-  statement (V.fromList $ Fld.toList assetBlock) [TH.vectorStatement|
+  statement assetBlock [TH.vectorStatement|
     select
       b.md5::text, b.id::int4
     from data.assets b

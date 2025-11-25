@@ -23,16 +23,19 @@ import System.Posix.Types (COff (..), CMode (..))
 import Foreign.C.Types (CTime (..))
 
 data FileInfo = FileInfo {
-    path :: !FilePath
-    , md5h :: !String
-    , size :: {-# UNPACK #-} !Int64
-    , modifTime :: {-# UNPACK #-} !Int64
-    , perms :: !CMode
+    lpathFI :: !FilePath
+    , rootLengthFI :: !Int
+    , md5hFI :: !String
+    , sizeFI :: {-# UNPACK #-} !Int64
+    , modifTimeFI :: {-# UNPACK #-} !Int64
+    , permsFI :: !CMode
   }
   deriving Show
 
 data DirInfo = DirInfo {
-    pathDI :: !FilePath
+    lpathDI :: !FilePath
+    , rootLengthDI :: !Int
+    , insetLengthDI :: Maybe Int
     , modifTimeDI :: {-# UNPACK #-} !Int64
     , permsDI :: !CMode
   }
@@ -64,7 +67,9 @@ filesAnalyser pLen root dirs files = do
     CTime mTime = modificationTime dirStatus
     fStatus = fileMode dirStatus
     dirInfo = DirInfo {
-      pathDI = drop pLen root
+      lpathDI = root
+      , rootLengthDI = pLen
+      , insetLengthDI = Nothing
       , modifTimeDI = mTime
       , permsDI = fStatus
     }
@@ -75,9 +80,9 @@ filesAnalyser pLen root dirs files = do
 hashCalc :: FilePath -> FilePath -> IO (Either String FileInfo)
 hashCalc prefix filePath =
   let
-    fullFilePath = case prefix of
-        "" -> filePath
-        _ -> prefix <> "/" <> filePath
+    (fullFilePath, rootLength) = case prefix of
+        "" -> (filePath, 0)
+        _ -> (prefix <> "/" <> filePath, length prefix + 1)
   in do
   pathExist <- doesPathExist fullFilePath
   if pathExist then do
@@ -89,8 +94,8 @@ hashCalc prefix filePath =
       COff fSize = fileSize fileStatus
       CTime mTime = modificationTime fileStatus
     pure . Right $ FileInfo {
-        path = filePath, md5h = md5Val, size = fSize
-        , modifTime = mTime, perms = fStatus
+        lpathFI = fullFilePath, rootLengthFI = rootLength, md5hFI = md5Val, sizeFI = fSize
+        , modifTimeFI = mTime, permsFI = fStatus
       }
   else
     pure . Left $ "@[hashCalc] no file: " <> filePath
@@ -108,7 +113,9 @@ showTree tree = do
 
 showTreeItem :: (DirInfo, [Either String FileInfo]) -> IO ()
 showTreeItem (fPath, files) = do
-  putStrLn $ "--- fPath: " <> fPath.pathDI
+  let
+    shortPath = drop fPath.rootLengthDI fPath.lpathDI
+  putStrLn $ "--- fPath: " <> shortPath
   Prelude.mapM_ showFileInfo files
 
 showFileInfo :: Either String FileInfo -> IO ()

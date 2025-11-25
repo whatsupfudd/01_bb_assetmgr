@@ -4,10 +4,11 @@ module DB.Operations where
 
 import Data.Bits ((.&.))
 import qualified Data.Foldable as Fld
-import Data.Int (Int32)
+import Data.Int (Int32, Int64)
 import qualified Data.Map.Strict as Mp
 import qualified Data.Sequence as Seq
 import Data.Text (Text, unpack, pack)
+import qualified Data.Text as T
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import Data.Word (Word16)
@@ -21,6 +22,8 @@ import qualified Hasql.Transaction.Sessions as Txs
 
 import qualified DB.Statements as St
 import qualified Storage.Explore as Xpl
+import Data.Time (UTCTime)
+import Data.Time.Clock.POSIX (utcTimeToPOSIXSeconds)
 
 useTx :: Pool -> Tx.Transaction tr -> IO (Either UsageError tr)
 useTx pool stmts = use pool (Txs.transaction Txs.Serializable Txs.Write stmts)
@@ -49,7 +52,7 @@ getTaxonomy dbPool owner label = do
                     Right taxoID -> pure $ Right (taxoID, True)
 
 
-fetchAssetsByMD5 :: Pool -> Seq.Seq Text -> IO (Either String (Mp.Map Text Int32))
+fetchAssetsByMD5 :: Pool -> V.Vector Text -> IO (Either String (Mp.Map Text Int32))
 fetchAssetsByMD5 dbPool md5Hashes = do
   rezB <- use dbPool $ St.fetchAssetsByMD5 md5Hashes
   case rezB of
@@ -82,6 +85,40 @@ addPathToTaxo dbPool taxoID mbParentID dirInfo lastPath =
   case rezB of
     Left err -> pure . Left $ "@[addPathsToTaxo] err: " <> show err <> "."
     Right aNodeOut -> pure $ Right (newNodeIn, aNodeOut)
+
+
+addVirtualDirToTaxo :: Pool -> Int32 -> Maybe Int32 -> (Text, UTCTime, Text) -> IO (Either String (St.NewNodeIn, St.NewNodeOut))
+addVirtualDirToTaxo dbPool taxoID mbParentID (label, lastmod, rights) =
+  let
+    newNodeIn = (label, mbParentID, Nothing, floor $ utcTimeToPOSIXSeconds lastmod, rights, taxoID)
+  in do
+  rezB <- use dbPool $ St.insertNode newNodeIn
+  case rezB of
+    Left err -> pure . Left $ "@[addPathsToTaxo] err: " <> show err <> "."
+    Right aNodeOut -> pure $ Right (newNodeIn, aNodeOut)
+
+
+-- NewNodeIn = label, parentid, assetid, lastmod, rights, arboid => (Text, Maybe Int32, Maybe Int32, Int64, Text, Int32)
+addFileToTaxo :: Pool -> Int32 -> Int32 -> Int32 ->Xpl.FileInfo -> IO (Either String Int32)
+addFileToTaxo dbPool taxoID dirNodeID assetID fileInfo =
+  let
+    rights = pack $ modeToOctalPerms fileInfo.permsFI
+    shortPath = T.drop fileInfo.rootLengthFI $ pack fileInfo.lpathFI
+    newNode = (shortPath, Just dirNodeID, Just assetID, fileInfo.modifTimeFI, rights, taxoID)
+  in do
+  -- putStrLn $ "@[addFileToTaxo] newNode: " <> show newNode
+  rezA <- use dbPool $ St.insertNode newNode
+  case rezA of
+    Left err -> pure . Left $ "@[addFileToTaxo] err: " <> show err <> "."
+    Right (nodeID, _) -> pure $ Right nodeID
+
+
+addAsset :: Pool -> Xpl.FileInfo -> (Text, Int64) -> IO (Either String Int32)
+addAsset dbPool fileInfo (locator, size) = do
+  rezA <- use dbPool $ St.insertAsset (pack fileInfo.md5hFI, size, locator)
+  case rezA of
+    Left err -> pure . Left $ "@[addAsset] err: " <> show err <> "."
+    Right (assetID, _) -> pure $ Right assetID
 
 
 -- | Convert a FileStatus (from getFileStatus) into an "rwx" owner permission string
