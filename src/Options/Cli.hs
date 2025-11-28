@@ -36,7 +36,8 @@ data Command =
 
 
 data ImportOpts = ImportOpts {
-    taxonomy :: Text
+    noRecurse :: Bool
+    ,taxonomy :: Text
     , path :: FilePath
     , anchor :: FilePath
   }
@@ -137,7 +138,9 @@ commandDefs =
 
 importOpts :: Parser ImportOpts
 importOpts =
-  ImportOpts <$> strArgument (metavar "TAXO" <> help "Taxonomy root where paths are inserted.")
+  ImportOpts
+    <$> switch (long "no-recurse" <> short '1' <> help "Do not recurse into subdirectories.")
+    <*> strArgument (metavar "TAXO" <> help "Taxonomy root where paths are inserted.")
     <*> strArgument (metavar "PATH" <> help "Directory to import into Beebod.")
     <*> strArgument (metavar "ROOT" <> help "Anchor path in the taxo for the import tree." <> value "" <> showDefault)
 

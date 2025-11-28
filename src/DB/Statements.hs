@@ -25,7 +25,7 @@ fetchTaxos =
   |]
 
 
-fetchTaxosForOwner :: Int32 -> Session (Vector (Text, Int32, Text))
+fetchTaxosForOwner :: Int32 -> Session (Vector TaxoLabelOut)
 fetchTaxosForOwner ownerID =
   statement ownerID [TH.vectorStatement|
     select
@@ -145,6 +145,22 @@ fetchNodesForTaxo taxoID =
   |]
 
 
+fetchSubTreeForNode :: Int32 -> Int32 -> Session (Vector NodeOut)
+fetchSubTreeForNode nodeID maxDepth =
+  statement (nodeID, maxDepth) [TH.vectorStatement|
+  with recursive xtree as (
+    select id, label, parentid, assetid, lastmod, 1 as depth
+      from taxo.nodes
+      where id = $1::int4
+    union all
+     select nd.id, nd.label, nd.parentid, nd.assetid, nd.lastmod, xt.depth+1 as depth
+       from taxo.nodes as nd
+        inner join xtree xt on xt.id = nd.parentid
+        where xt.depth <= $2::int4
+    ) select id::int4, label::text, parentid::int4?, assetid::int4?, lastmod::timestamptz?, depth::int4 from xtree
+  |]
+
+
 type NodeInfoOut = (Text, Maybe Int32, Maybe UTCTime, Maybe Text, Maybe Int64, Maybe Text, Maybe UTCTime)
 fetchNodeInfo :: Int32 -> Session (Maybe NodeInfoOut)
 fetchNodeInfo nodeID =
@@ -191,4 +207,38 @@ insertNode params =
       (label, parentid, assetid, lastmod, rights, arboid)
       values ($1::text, $2::int4?, $3::int4?, to_timestamp($4::int8), $5::text, $6::int4)
     returning id::int4, to_timestamp($4::int8)::timestamptz
+  |]
+
+derefPathToNode :: Int32 -> Vector Text -> Session (Maybe Int32)
+derefPathToNode arboid path =
+  statement (arboid, path) [TH.maybeStatement|
+    WITH RECURSIVE pathwalk AS (
+      SELECT
+          n.id,
+          n.parentid,
+          n.label,
+          n.arboid,
+          1 AS depth
+      FROM taxo.nodes n
+      WHERE n.label = ($2::text[])[1]
+        AND n.assetid IS NULL
+        AND n.arboid = $1::int4
+
+      UNION ALL
+
+      SELECT
+          c.id,
+          c.parentid,
+          c.label,
+          c.arboid,
+          pw.depth + 1 AS depth
+      FROM taxo.nodes c
+      JOIN pathwalk pw ON c.parentid = pw.id
+      WHERE c.label = ($2::text[])[pw.depth + 1]
+        AND c.assetid IS NULL
+  )
+  SELECT id::int4
+  FROM pathwalk
+  WHERE depth = array_length($2::text[], 1)
+  LIMIT 1
   |]

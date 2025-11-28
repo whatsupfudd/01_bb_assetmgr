@@ -30,6 +30,8 @@ library
       DB.Connect
       DB.Operations
       DB.Statements
+      Logic.Ingestion
+      Logic.Listing
       MainLogic
       Options
       Options.Cli
@@ -55,6 +57,7 @@ library
     , bytestring
     , conduit
     , containers
+    , cryptonite
     , directory
     , filepath
     , gitrev
@@ -100,6 +103,7 @@ executable assetmgr
     , bytestring
     , conduit
     , containers
+    , cryptonite
     , directory
     , filepath
     , gitrev
@@ -146,6 +150,7 @@ test-suite assetmgr-test
     , bytestring
     , conduit
     , containers
+    , cryptonite
     , directory
     , filepath
     , gitrev

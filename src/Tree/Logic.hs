@@ -32,7 +32,6 @@ showTree items tree di = do
           -- <> ", # leaves: " <> show di.lenLeaves <> ", mp2 #: " <> show di.mp2Size
           <> ", tree size: " <> show (sizeTree tree)
           <> "."
-
   Prelude.mapM_ (showTreeItem 0) (Mi.elems tree)
 
 
@@ -321,14 +320,10 @@ buildForestMapV :: Vc.Vector Op.NodeOut -> Tr.FolderMap Op.NodeOut
 buildForestMapV vec =
   let
     -- Phase 1: group child indices by parent id, and collect root indices.
-    (rootIdxsRev, childIndexMap) = Vc.ifoldl' step ([], Mi.empty) vec
+    (rootIdxsRev, childIndexMap) = Vc.ifoldl' iterForest ([], Mi.empty) vec
 
-    step
-      :: ([Int], Mi.IntMap [Int])
-      -> Int
-      -> Op.NodeOut
-      -> ([Int], Mi.IntMap [Int])
-    step (!roots, !mp) ix n =
+    iterForest :: ([Int], Mi.IntMap [Int]) -> Int -> Op.NodeOut -> ([Int], Mi.IntMap [Int])
+    iterForest (!roots, !mp) ix n =
       case nodeParentId n of
         Nothing ->
           -- root element
