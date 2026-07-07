@@ -35,6 +35,7 @@ runWithOptions cliOptions fileOptions = do
             Opt.TestCmd subCmd -> Cmd.testCmd subCmd
             Opt.ListCmd params -> Cmd.listCmd params
             Opt.FetchCmd params -> Cmd.fetchCmd params
+            Opt.SyncCmd params -> Cmd.syncCmd params
       rtOptions <- Opt.mergeOptions cliOptions fileOptions envOptions
       result <- cmdExecutor rtOptions
       -- TODO: return a properly kind of conclusion.

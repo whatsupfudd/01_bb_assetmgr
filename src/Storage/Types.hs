@@ -35,6 +35,12 @@ data S3Conn = S3Conn {
   }
 
 
+data S3ObjectMeta = S3ObjectMeta
+  { key  :: Text
+  , size :: Maybe Int64
+  } deriving (Show)
+
+
 data Asset = Asset {
     name :: Maybe Text
     , uid :: Maybe Int32

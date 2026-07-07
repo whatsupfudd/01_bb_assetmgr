@@ -63,7 +63,10 @@ dependencies:
   - uuid
   - transformers
   - cryptonite
-
+  # For bunny sync:
+  - base64-bytestring
+  - http-client-tls
+  - http-types
 
 default-extensions:
 - OverloadedStrings

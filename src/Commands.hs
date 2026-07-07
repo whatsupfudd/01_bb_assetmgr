@@ -6,6 +6,7 @@ module Commands  (
   , module Commands.IngestClass
   , module Commands.List
   , module Commands.Fetch
+  , module Commands.Sync
  )
 where
 
@@ -16,3 +17,4 @@ import Commands.Test
 import Commands.IngestClass
 import Commands.List
 import Commands.Fetch
+import Commands.Sync

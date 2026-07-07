@@ -35,7 +35,7 @@ data PgDbOpts = PgDbOpts {
   , dbase :: Maybe String
   , poolSize :: Maybe Int
   , poolTimeOut :: Maybe Int
-}
+  }
   deriving stock (Show, Generic)
 
 
@@ -46,9 +46,19 @@ data FileOptions = FileOptions {
   , rootDir :: Maybe String
   , owner :: Maybe String
   , s3store :: Maybe S3Options
- }
- deriving stock (Show, Generic)
+  , bunnyStore :: Maybe BunnyStoreOpts
+  }
+  deriving stock (Show, Generic)
 
+
+data BunnyStoreOpts = BunnyStoreOpts {
+  zoneName :: Maybe String
+  , accessKey :: Maybe String
+  , endpoint :: Maybe String
+  , pullZoneUrl :: Maybe String
+  , prefix :: Maybe String
+  }
+  deriving stock (Show, Generic)
 
 defaultConfName :: FilePath
 defaultConfName = ".fudd/assetmgr/config.yaml"
@@ -66,6 +76,8 @@ defaultConfigFilePath = do
 instance Aes.FromJSON FileOptions
 instance Aes.FromJSON PgDbOpts
 instance Aes.FromJSON S3Options
+instance Aes.FromJSON BunnyStoreOpts
+
 
 parseFileOptions :: FilePath -> IO (Either String FileOptions)
 parseFileOptions filePath =

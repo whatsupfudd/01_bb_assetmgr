@@ -242,3 +242,38 @@ derefPathToNode arboid path =
   WHERE depth = array_length($2::text[], 1)
   LIMIT 1
   |]
+
+
+-- | DB-selected asset candidate for CDN/storage synchronisation.
+--
+-- asset id, md5, size, S3/object locator, asset lastmod, best original filename/path hint
+type AssetSyncOut = (Int32, Text, Int64, Text, Maybe UTCTime, Maybe Text)
+
+-- | Select assets from the asset catalogue instead of listing S3.
+--
+-- The locator prefix is optional.  When present, it is applied directly to
+-- data.assets.locator, which is the object key later used by Storage.S3.getFile.
+--
+-- This intentionally selects from data.assets rather than from object storage:
+-- the DB is the canonical catalogue for asset identity, size and locator.
+-- | DB-selected asset candidate for CDN/storage synchronisation.
+--
+
+
+fetchAssetsForSync :: (Maybe Text, Int32) -> Session (Vector AssetSyncOut)
+fetchAssetsForSync params =
+  statement params [TH.vectorStatement|
+    select distinct on (a.id)
+      a.id::int4,
+      a.md5::text,
+      a.size::int8,
+      a.locator::text,
+      a.lastmod::timestamptz?,
+      n.label::text?
+    from data.assets a
+    left join taxo.nodes n
+      on n.assetid = a.id
+    where a.locator like coalesce($1::text?, '') || '%'
+    order by a.id, n.lastmod desc nulls last
+    limit $2::int4
+  |]

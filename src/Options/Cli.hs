@@ -7,6 +7,8 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Options.Applicative
 
+import qualified BunnySync.Types as Bst
+
 
 newtype EnvOptions = EnvOptions {
     appHome :: Maybe Text
@@ -32,6 +34,7 @@ data Command =
   | IngestCmd Text
   | ListCmd ListOpts
   | FetchCmd FetchOpts
+  | SyncCmd SyncOpts
   deriving stock (Show)
 
 
@@ -58,6 +61,19 @@ data ListOpts = ListOpts {
 data FetchOpts = FetchOpts {
     nodeID :: Int32
     , outputFile :: FilePath
+  }
+  deriving stock (Show)
+
+data SyncOpts = SyncOpts {
+    sourcePrefix :: Text
+    , destinationPrefix :: Text
+    , dryRun :: Bool
+    , overwrite :: Bool
+    , verify :: Bst.SyncVerifyMode
+    , concurrency :: Int32
+    , limit :: Maybe Int32
+    , manifest :: Maybe FilePath
+    , tmpDir :: Maybe FilePath
   }
   deriving stock (Show)
 
@@ -126,6 +142,7 @@ commandDefs =
       , ("ingest", ingestOpts, "Ingest an image description file from ImgClassifier program.")
       , ("list", ListCmd <$> listOpts, "Show the content of a taxonomy.")
       , ("fetch", FetchCmd <$> fetchOpts, "Fetch a node from Beebod.")
+      , ("sync", SyncCmd <$> syncOpts, "Sync data from one zone to another.")
       ]
     headArray = head cmdArray
     tailArray = tail cmdArray
@@ -167,6 +184,24 @@ fetchOpts =
   FetchOpts
     <$> argument intReader (metavar "NODEID" <> help "Node ID to fetch." <> value 0)
     <*> strArgument (metavar "OUTPUTFILE" <> value "" <> help "File to write the output to.")
+
+
+syncOpts :: Parser SyncOpts
+syncOpts =
+  SyncOpts
+    <$> strArgument (metavar "SOURCEPREFIX" <> value "" <> help "Source prefix.")
+    <*> strArgument (metavar "DESTINATIONPREFIX" <> value "" <> help "Destination prefix.")
+    <*> switch (long "dry-run" <> short 'd' <> help "Dry run.")
+    <*> switch (long "overwrite" <> short 'o' <> help "Overwrite.")
+    <*> option verifyMode (long "verify" <> value Bst.NoneVsm <> help "Verify mode.")
+    <*> option auto (long "concurrency" <> short 'c' <> help "Concurrency." <> value 1)
+    <*> optional (option intReader (long "limit" <> short 'l' <> help "Limit."))
+    <*> optional (strOption (long "manifest" <> short 'm' <> help "Manifest."))
+    <*> optional (strOption (long "tmpdir" <> short 't' <> help "Temporary directory."))
+  where
+  verifyMode :: ReadM Bst.SyncVerifyMode
+  verifyMode =
+    maybeReader Bst.parseSyncVerifyMode
 
 
 intReader :: ReadM Int32

@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.37.0.
+-- This file has been generated from package.yaml by hpack version 0.38.1.
 --
 -- see: https://github.com/sol/hpack
 
@@ -19,12 +19,16 @@ extra-source-files:
 
 library
   exposed-modules:
+      BunnySync.Http
+      BunnySync.Mime
+      BunnySync.Types
       Commands
       Commands.Fetch
       Commands.Help
       Commands.Import
       Commands.IngestClass
       Commands.List
+      Commands.Sync
       Commands.Test
       Commands.Version
       DB.Connect
@@ -54,6 +58,7 @@ library
   build-depends:
       aeson
     , base >=4.7 && <5
+    , base64-bytestring
     , bytestring
     , conduit
     , containers
@@ -66,6 +71,8 @@ library
     , hasql-th
     , hasql-transaction
     , http-client
+    , http-client-tls
+    , http-types
     , memory
     , minio-hs
     , mtl
@@ -100,6 +107,7 @@ executable assetmgr
       aeson
     , assetmgr
     , base >=4.7 && <5
+    , base64-bytestring
     , bytestring
     , conduit
     , containers
@@ -112,6 +120,8 @@ executable assetmgr
     , hasql-th
     , hasql-transaction
     , http-client
+    , http-client-tls
+    , http-types
     , memory
     , minio-hs
     , mtl
@@ -147,6 +157,7 @@ test-suite assetmgr-test
       aeson
     , assetmgr
     , base >=4.7 && <5
+    , base64-bytestring
     , bytestring
     , conduit
     , containers
@@ -159,6 +170,8 @@ test-suite assetmgr-test
     , hasql-th
     , hasql-transaction
     , http-client
+    , http-client-tls
+    , http-types
     , memory
     , minio-hs
     , mtl

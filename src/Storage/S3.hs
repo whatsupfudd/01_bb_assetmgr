@@ -1,6 +1,7 @@
 module Storage.S3 (S3Config (..)
   , makeS3Conn, defaultS3Conf, listFiles, listFilesWith
   , putFile, getFile, getFileB
+  , listObjectsMeta
 ) where
 
 import Data.Text (Text, unpack, pack)
@@ -12,7 +13,7 @@ import qualified Network.Minio as Mn
 import UnliftIO (throwIO, try)
 import Network.HTTP.Client as NC
 
-import Storage.Types (S3Config (..), S3Conn (..), defaultS3Conf)
+import Storage.Types (S3Config (..), S3Conn (..), defaultS3Conf, S3ObjectMeta (..))
 
 makeS3Conn :: S3Config -> S3Conn
 makeS3Conn conf =
@@ -120,3 +121,22 @@ listFilesWith s3Conf paths = do
   case errors of
     "" -> pure $ Right allFound
     aVal -> pure $ Left aVal
+
+
+listObjectsMeta :: S3Conn -> Maybe Text -> IO (Either String [S3ObjectMeta])
+listObjectsMeta s3Conf path = do
+  rezA <- Mn.runMinio s3Conf.connInfoCn $ do
+    runConduit $ Mn.listObjects s3Conf.bucketCn path True .| sinkList
+  case rezA of
+    Left err -> pure . Left $ show err
+    Right listItems -> pure . Right $ map itemToMeta listItems
+  where
+    itemToMeta anItem = case anItem of
+      Mn.ListItemPrefix p -> S3ObjectMeta
+        { key = p
+        , size = Nothing
+        }
+      Mn.ListItemObject o -> S3ObjectMeta
+        { key = Mn.oiObject o
+        , size = Just $ Mn.oiSize o
+        }

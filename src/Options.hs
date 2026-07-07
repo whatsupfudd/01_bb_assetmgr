@@ -24,6 +24,7 @@ import qualified Options.Cli as Cl (CliOptions (..), EnvOptions (..))
 import qualified Options.ConfFile as Fo
 import qualified Storage.Types as St (S3Config (..), defaultS3Conf)
 import qualified Options.Runtime as Rt (RunOptions (..), defaultRun, PgDbConfig (..), defaultPgDbConf)
+import qualified BunnySync.Types as Bst
 import qualified DB.Connect as Db
 
 
@@ -32,6 +33,7 @@ type RunOptSt = State Rt.RunOptions ConfError
 type RunOptIOSt = StateT Rt.RunOptions IO ConfError
 type PgDbOptIOSt = StateT Rt.PgDbConfig (StateT Rt.RunOptions IO) ConfError
 type S3OptIOSt = StateT St.S3Config (StateT Rt.RunOptions IO) ConfError
+type BunnySyncOptIOSt = StateT Bst.BunnyConfig (StateT Rt.RunOptions IO) ConfError
 
 
 mconf :: MonadState s m => Maybe t -> (t -> s -> s) -> m ()
@@ -73,6 +75,7 @@ mergeOptions cli file env = do
     mconf cli.debug $ \nVal s -> s { Rt.debug = nVal }
     innerConf (\nVal s -> s { Rt.pgDbConf = nVal }) parsePgDb Rt.defaultPgDbConf file.pgDb
     innerConf (\nVal s -> s { Rt.s3store = Just nVal }) parseS3 St.defaultS3Conf file.s3store
+    innerConf (\nVal s -> s { Rt.bunnyStore = Just nVal }) parseBunny Bst.defaultBunnyConf file.bunnyStore
     pure $ Right ()
 
 
@@ -94,6 +97,16 @@ mergeOptions cli file env = do
     mconf s3O.bucket $ \nVal s -> s { St.bucket = nVal }
     pure $ Right ()
 
+  parseBunny :: Fo.BunnyStoreOpts -> BunnySyncOptIOSt
+  parseBunny bunnyO = do
+    mconf bunnyO.zoneName $ \nVal s -> s { Bst.zoneName = T.pack nVal }
+    mconf bunnyO.accessKey $ \nVal s -> s { Bst.accessKey = T.pack nVal }
+    mconf bunnyO.endpoint $ \nVal s -> s { Bst.endpoint = T.pack nVal }
+    mconf bunnyO.pullZoneUrl $ \nVal s -> s { Bst.pullZoneUrl = Just (T.pack nVal) }
+    mconf bunnyO.prefix $ \nVal s -> s { Bst.prefix = Just (T.pack nVal) }
+    pure $ Right ()
+  
+  
 -- | resolveEnvValue resolves an environment variable value.
 resolveEnvValue :: FilePath -> IO (Maybe FilePath)
 resolveEnvValue aVal =

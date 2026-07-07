@@ -162,3 +162,12 @@ modeToOctalPerms fileMode =
 
     digit :: Int -> Char
     digit n = toEnum (fromEnum '0' + n)
+
+
+-- Support for CDN/storage synchronisation.
+fetchAssetsForSync :: Pool -> Maybe Text -> Int32 -> IO (Either String (V.Vector St.AssetSyncOut))
+fetchAssetsForSync dbPool mbLocatorPrefix maxItems = do
+  rezA <- use dbPool $ St.fetchAssetsForSync (mbLocatorPrefix, maxItems)
+  case rezA of
+    Left err -> pure . Left $ "@[fetchAssetsForSync] err: " <> show err <> "."
+    Right items -> pure $ Right items
